@@ -1,0 +1,5 @@
+Django==3.2.9
+django-environ==0.8.1
+google-auth==2.3.3
+google-cloud-secret-manager==2.8.0
+mysqlclient==2.1.0
