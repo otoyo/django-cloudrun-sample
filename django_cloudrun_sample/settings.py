@@ -10,7 +10,24 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/3.2/ref/settings/
 """
 
+import io
+import os
 from pathlib import Path
+
+import google.auth
+from google.cloud import secretmanager
+
+import environ
+
+env = environ.Env(
+        DEBUG=(bool, True),
+        SECRET_KEY=(str, 'django-insecure-qnr$*ocy$diy6v#o&^k5x-9ofw@mn@4+bww*vyzwd4ydx%g@!d'),
+        DB_NAME=(str, 'django_cloudrun_sample_dev'),
+        DB_USER=(str, 'root'),
+        DB_PASSWORD=(str, ''),
+        DB_HOST=(str, 'mysql'),
+        DB_PORT=(str, '3306'),
+        )
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -20,12 +37,30 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/3.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-qnr$*ocy$diy6v#o&^k5x-9ofw@mn@4+bww*vyzwd4ydx%g@!d'
+SECRET_KEY = env('SECRET_KEY')
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = env('DEBUG')
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
+
+
+try:
+    _, os.environ["GOOGLE_CLOUD_PROJECT"] = google.auth.default()
+except google.auth.exceptions.DefaultCredentialsError:
+    pass
+
+if os.environ.get("GOOGLE_CLOUD_PROJECT", None):
+    # Pull secrets from Secret Manager and set env
+    project_id = os.environ.get("GOOGLE_CLOUD_PROJECT")
+    secret_name = 'django-cloudrun-sample-settings' # name of secret in Secret Manager
+
+    client = secretmanager.SecretManagerServiceClient()
+    name = f"projects/{project_id}/secrets/{secret_name}/versions/latest"
+    payload = client.access_secret_version(name=name).payload.data.decode("UTF-8")
+
+    env.read_env(io.StringIO(payload))
+
 
 
 # Application definition
@@ -75,8 +110,16 @@ WSGI_APPLICATION = 'django_cloudrun_sample.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': env('DB_NAME'),
+        'USER': env('DB_USER'),
+        'PASSWORD': env('DB_PASSWORD'),
+        'HOST': env('DB_HOST'),
+        'PORT': env('DB_PORT'),
+        'TEST': {
+            'NAME': 'django_cloudrun_sample_test',
+            'CHARSET': 'utf8mb4',
+        },
     }
 }
 
